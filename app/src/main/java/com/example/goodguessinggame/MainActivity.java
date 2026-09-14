@@ -30,7 +30,7 @@ public class MainActivity extends AppCompatActivity {
         btnNewGame.setOnClickListener(v -> startNewGame());
         btnGuess.setOnClickListener(v -> handleGuess());
 
-        startNewGame();
+
     }
 
     private void initViews() {
@@ -58,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private void startNewGame() {
         GuessGame.Difficulty selectedDifficulty = getSelectedDifficulty();
 
+        btnNewGame.setEnabled(false);
         if (game == null) {
             game = new GuessGame(selectedDifficulty);
         } else {
@@ -107,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
                 tvTimer.setText("0 ث");
                 game.timeout();
                 stopTimer();
+                btnGuess.setEnabled(true);
                 updateUI("انتهى الوقت! خسرت الجولة.");
             }
         }.start();

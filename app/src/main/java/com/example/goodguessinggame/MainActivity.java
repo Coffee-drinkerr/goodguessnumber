@@ -161,10 +161,6 @@ public class MainActivity extends AppCompatActivity {
         pickEditText.setText("");
     }
 
-    /**
-     * Reads and validates input, evaluates guess via GuessGame engine,
-     * updates attempts, and displays hints or win/loss dialogs.
-     */
     private void handleGuess() {
         if (game.isGameOver()) return;
 
@@ -206,13 +202,7 @@ public class MainActivity extends AppCompatActivity {
         pickEditText.setText("");
     }
 
-    /**
-     * Creates and presents a non-dismissible AlertDialog displaying win/lose results
-     * and a button to restart the game.
-     *
-     * @param title   Dialog title header text.
-     * @param message Body text showing final scores or answer details.
-     */
+
     private void showGameOverDialog(String title, String message) {
         cancelTimer();
 
@@ -227,18 +217,14 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    /**
-     * Safely stops the CountDownTimer object if active.
-     */
+
     private void cancelTimer() {
         if (countDownTimer != null) {
             countDownTimer.cancel();
         }
     }
 
-    /**
-     * Lifecycle callback ensuring background timers are terminated when Activity is destroyed.
-     */
+
     @Override
     protected void onDestroy() {
         super.onDestroy();

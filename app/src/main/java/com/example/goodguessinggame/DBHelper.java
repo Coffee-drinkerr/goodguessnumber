@@ -5,151 +5,97 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.util.Log;
 
 import java.util.ArrayList;
 
-import androidx.annotation.Nullable;
-
 public class DBHelper extends SQLiteOpenHelper {
 
-    private static final String DATABASENAME = "result.db";
-    private static final String TABLE_RECORD = "tblresult";
-    private static final int DATABASEVERSION = 1;
-    // ?
-    private static final String COLUMN_ID = "_id";
-    private static final String COLUMN_NAME = "name";
-    private static final String COLUMN_SCORE = "score";
-    private static final String COLUMN_RATING = "rating";
+    private static final String DATABASE_NAME = "GoodGuessingGame.db";
+    private static final int DATABASE_VERSION = 2;
 
-    private static final String[] allColumns = {COLUMN_ID, COLUMN_NAME, COLUMN_SCORE};
-
-    private static final String CREATE_TABLE_USER = "CREATE TABLE IF NOT EXISTS " +
-            TABLE_RECORD + "(" +
-            COLUMN_ID + " INTEGER PRIMARY KEY AUTOINCREMENT," +
-            COLUMN_NAME + " TEXT," +
-            COLUMN_SCORE + " INTEGER );";
-
-    private SQLiteDatabase database; // access to table
-
-    public DBHelper(@Nullable Context context) {
-        super(context, DATABASENAME, null, DATABASEVERSION);
+    public DBHelper(Context context) {
+        super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
 
-
-    // creating the database
     @Override
-    public void onCreate(SQLiteDatabase sqLiteDatabase)
-    {
-        sqLiteDatabase.execSQL(CREATE_TABLE_USER);
+    public void onCreate(SQLiteDatabase db) {
+        // Auth table for login & registration
+        db.execSQL("CREATE TABLE IF NOT EXISTS users_auth (username TEXT PRIMARY KEY, password TEXT NOT NULL)");
+
+        // High score table
+        db.execSQL("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, score INTEGER, level INTEGER)");
     }
 
-    // in case of version upgrade -> new schema
-    // database version
     @Override
-    public void onUpgrade(SQLiteDatabase sqLiteDatabase, int i, int i1) {
-        sqLiteDatabase.execSQL("DROP TABLE IF EXISTS " + TABLE_RECORD);
-        onCreate(sqLiteDatabase);
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        db.execSQL("DROP TABLE IF EXISTS users_auth");
+        db.execSQL("DROP TABLE IF EXISTS users");
+        onCreate(db);
     }
 
+    // --- Authentication Methods ---
 
-    // get the user back with the id
-    // also possible to return only the id
-    public ModelUser insert(ModelUser user)
-    {
-        database = getWritableDatabase(); // get access to write the database
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_NAME, user.getUserName());
-        values.put(COLUMN_SCORE, user.getScore());
-        long id = database.insert(TABLE_RECORD, null, values);
-        user.setId(id);
-        database.close();
-        return user;
-    }
+    public boolean registerUser(String username, String password) {
+        SQLiteDatabase db = this.getWritableDatabase();
 
-    // remove a specific user from the table
-    public void deleteUser(ModelUser user)
-    {
-
-    }
-
-    public void deleteById(long id )
-    {
-        database = getWritableDatabase(); // get access to write e data
-        database.delete(TABLE_RECORD, COLUMN_ID + " = " + id, null);
-        database.close(); // close the database
-
-    }
-
-
-    // update a specific user
-    public void update(ModelUser user)
-    {
-        database = getWritableDatabase();
-        ContentValues values = new ContentValues();
-        values.put(COLUMN_ID, user.getId());
-        values.put(COLUMN_NAME, user.getUserName());
-        values.put(COLUMN_SCORE, user.getScore());
-        database.update(TABLE_RECORD, values, COLUMN_ID + "=" + user.getId(), null);
-        database.close();
-
-    }
-
-    // return all rows in table
-    public ArrayList<ModelUser> selectAll()
-    {
-        database = getReadableDatabase(); // get access to read the database
-        ArrayList<ModelUser> users = new ArrayList<>();
-        String sortOrder = COLUMN_SCORE + " DESC"; // sorting by score
-        Cursor cursor = database.query(TABLE_RECORD, allColumns, null, null, null, null, sortOrder); // cursor points at a certain row
+        // Check if username already exists
+        Cursor cursor = db.rawQuery("SELECT * FROM users_auth WHERE username = ?", new String[]{username});
         if (cursor.getCount() > 0) {
-            while (cursor.moveToNext()) {
-                String name = cursor.getString(cursor.getColumnIndex(COLUMN_NAME));
-                int score = cursor.getInt(cursor.getColumnIndex(COLUMN_SCORE));
-                long id = cursor.getLong(cursor.getColumnIndex(COLUMN_ID));
-                ModelUser user= new ModelUser(name, score, id);
-                users.add(user);
-            }
+            cursor.close();
+            return false; // Username taken
         }
-        database.close();
-        return users;
+        cursor.close();
+
+        ContentValues values = new ContentValues();
+        values.put("username", username);
+        values.put("password", password);
+
+        long result = db.insert("users_auth", null, values);
+        return result != -1;
     }
 
-    //
-    // I prefer using this one...
-    //
-    public ArrayList<ModelUser> genericSelectByUserName(String userName)
-    {
-        String[] vals = { userName };
-        // if using the rawQuery
-        // String query = "SELECT * FROM " + TABLE_RECORD + " WHERE " + COLUMN_NAME + " = ?";
-        String column = COLUMN_NAME;
-        return select(column,vals);
+    public boolean checkLogin(String username, String password) {
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM users_auth WHERE username = ? AND password = ?", new String[]{username, password});
+        boolean exists = cursor.getCount() > 0;
+        cursor.close();
+        return exists;
     }
 
+    // --- Score Methods ---
 
-    // INPUT: notice two options rawQuery should look like
-    // rawQuery("SELECT id, name FROM people WHERE name = ? AND id = ?", new String[] {"David", "2"});
-    // OUTPUT: arraylist - number of elements accordingly
-    public ArrayList<ModelUser> select(String column,String[] values)
-    {
-        database = getReadableDatabase(); // get access to read the database
-        ArrayList<ModelUser> users = new ArrayList<>();
-        // Two options,
-        // since query cannot be created in compile time there is no difference
-        //Cursor cursor = database.rawQuery(query, values);
-        Cursor cursor= database.query(TABLE_RECORD, allColumns, COLUMN_NAME +" = ? ", values, null, null, null); // cursor points at a certain row
-        if (cursor.getCount() > 0) {
-            while (cursor.moveToNext()) {
-                String name = cursor.getString(cursor.getColumnIndex(COLUMN_NAME));
-                int score = cursor.getInt(cursor.getColumnIndex(COLUMN_SCORE));
-                long id = cursor.getLong(cursor.getColumnIndex(COLUMN_ID));
-                ModelUser user= new ModelUser(name, score, id);
-                users.add(user);
-            }// end while
-        } // end if
-        database.close();
-        return users;
+    public ArrayList<ModelUser> genericSelectByUserName(String name) {
+        ArrayList<ModelUser> userList = new ArrayList<>();
+        SQLiteDatabase db = this.getReadableDatabase();
+        Cursor cursor = db.rawQuery("SELECT * FROM users WHERE name = ?", new String[]{name});
+
+        if (cursor.moveToFirst()) {
+            do {
+                int id = cursor.getInt(cursor.getColumnIndexOrThrow("id"));
+                String userName = cursor.getString(cursor.getColumnIndexOrThrow("name"));
+                int score = cursor.getInt(cursor.getColumnIndexOrThrow("score"));
+                int level = cursor.getInt(cursor.getColumnIndexOrThrow("level"));
+                userList.add(new ModelUser(userName, score, level));
+            } while (cursor.moveToNext());
+        }
+        cursor.close();
+        return userList;
     }
 
+    public void insert(ModelUser user) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("name", user.getName());
+        values.put("score", user.getScore());
+        values.put("level", user.getLevel());
+        db.insert("users", null, values);
+    }
+
+    public void update(ModelUser user) {
+        SQLiteDatabase db = this.getWritableDatabase();
+        ContentValues values = new ContentValues();
+        values.put("score", user.getScore());
+        values.put("level", user.getLevel());
+        db.update("users", values, "name = ?", new String[]{user.getName()});
+    }
 }

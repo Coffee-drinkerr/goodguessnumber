@@ -3,12 +3,14 @@ package com.example.goodguessinggame;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -29,17 +31,15 @@ public class MainActivity extends AppCompatActivity {
     private EditText nameEditText;
     private Button submitButton;
     private CountDownTimer countDownTimer;
-    private boolean isTimerStarted = false; // Prevents timer from restarting on every keypress
-    private int remainingSeconds = 0;      // Tracks remaining seconds to calculate bonus points
+    private boolean isTimerStarted = false;
+    private int remainingSeconds = 0;
     private DBHelper db;
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Bind layout XML views to Java variables
         scoreTextView = findViewById(R.id.score);
         attemptsTextView = findViewById(R.id.attempts);
         timerTextView = findViewById(R.id.timer);
@@ -48,11 +48,12 @@ public class MainActivity extends AppCompatActivity {
         submitButton = findViewById(R.id.submit);
         nameEditText = findViewById(R.id.name);
 
-        // Instantiate game model with initial EASY difficulty
         game = new GuessGame(GuessGame.Difficulty.EASY);
         db = new DBHelper(this);
 
-        // Populate Difficulty Spinner with Enum values (EASY, MEDIUM, HARD)
+        // Show login dialog when opening the app
+        showLoginDialog();
+
         ArrayAdapter<GuessGame.Difficulty> adapter = new ArrayAdapter<>(
                 this,
                 android.R.layout.simple_spinner_item,
@@ -61,7 +62,6 @@ public class MainActivity extends AppCompatActivity {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         difficultySpinner.setAdapter(adapter);
 
-        // Trigger new game whenever user picks a different difficulty from spinner
         difficultySpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -73,14 +73,12 @@ public class MainActivity extends AppCompatActivity {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
 
-
         pickEditText.addTextChangedListener(new TextWatcher() {
             @Override
             public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-
                 if (!isTimerStarted && s.length() > 0 && !game.isGameOver()) {
                     isTimerStarted = true;
                     startTimer();
@@ -91,9 +89,119 @@ public class MainActivity extends AppCompatActivity {
             public void afterTextChanged(Editable s) {}
         });
 
-
         submitButton.setOnClickListener(v -> handleGuess());
     }
+
+    // --- Authentication Dialogs ---
+
+    private void showLoginDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(60, 40, 60, 10);
+
+        final EditText usernameInput = new EditText(this);
+        usernameInput.setHint("Username");
+
+        final EditText passwordInput = new EditText(this);
+        passwordInput.setHint("Password");
+        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        layout.addView(usernameInput);
+        layout.addView(passwordInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Login")
+                .setView(layout)
+                .setCancelable(false)
+                .setPositiveButton("Login", (dialog, which) -> {
+                    String user = usernameInput.getText().toString().trim();
+                    String pass = passwordInput.getText().toString().trim();
+
+                    if (user.isEmpty() || pass.isEmpty()) {
+                        Toast.makeText(MainActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
+                        showLoginDialog();
+                        return;
+                    }
+
+                    if (db.checkLogin(user, pass)) {
+                        Toast.makeText(MainActivity.this, "Welcome, " + user + "!", Toast.LENGTH_SHORT).show();
+                        if (nameEditText != null) {
+                            nameEditText.setText(user);
+                        }
+                    } else {
+                        Toast.makeText(MainActivity.this, "Invalid username or password", Toast.LENGTH_SHORT).show();
+                        showLoginDialog();
+                    }
+                })
+                .setNegativeButton("Register", (dialog, which) -> showRegisterDialog())
+                .show();
+    }
+
+    private void showRegisterDialog() {
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(60, 40, 60, 10);
+
+        final EditText usernameInput = new EditText(this);
+        usernameInput.setHint("New Username");
+
+        final EditText passwordInput = new EditText(this);
+        passwordInput.setHint("New Password");
+        passwordInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+
+        layout.addView(usernameInput);
+        layout.addView(passwordInput);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Register New User")
+                .setView(layout)
+                .setCancelable(false)
+                .setPositiveButton("Register", (dialog, which) -> {
+                    String user = usernameInput.getText().toString().trim();
+                    String pass = passwordInput.getText().toString().trim();
+
+                    if (user.isEmpty() || pass.isEmpty()) {
+                        Toast.makeText(MainActivity.this, "Please fill in all fields", Toast.LENGTH_SHORT).show();
+                        showRegisterDialog();
+                        return;
+                    }
+
+                    if (!isValidPassword(pass)) {
+                        Toast.makeText(MainActivity.this, "Password must be 6+ chars, with numbers, letters, and 1 uppercase letter.", Toast.LENGTH_LONG).show();
+                        showRegisterDialog();
+                        return;
+                    }
+
+                    // Save user credentials into database
+                    if (db.registerUser(user, pass)) {
+                        Toast.makeText(MainActivity.this, "Registered successfully! Please log in.", Toast.LENGTH_SHORT).show();
+                        showLoginDialog(); // Opens login dialog again
+                    } else {
+                        Toast.makeText(MainActivity.this, "Username already exists!", Toast.LENGTH_SHORT).show();
+                        showRegisterDialog();
+                    }
+                })
+                .setNegativeButton("Back", (dialog, which) -> showLoginDialog())
+                .show();
+    }
+
+    private boolean isValidPassword(String password) {
+        if (password == null || password.length() < 6) return false;
+
+        boolean hasLetter = false;
+        boolean hasDigit = false;
+        boolean hasUpper = false;
+
+        for (char c : password.toCharArray()) {
+            if (Character.isLetter(c)) hasLetter = true;
+            if (Character.isDigit(c)) hasDigit = true;
+            if (Character.isUpperCase(c)) hasUpper = true;
+        }
+
+        return hasLetter && hasDigit && hasUpper;
+    }
+
+    // --- Game Logic ---
 
     private void updateDB() {
         String name = nameEditText.getText().toString().trim();
@@ -105,7 +213,6 @@ public class MainActivity extends AppCompatActivity {
         ArrayList<ModelUser> users = db.genericSelectByUserName(name);
 
         if (!users.isEmpty()) {
-
             ModelUser existingUser = users.get(0);
             if (currentScore > existingUser.getScore()) {
                 existingUser.setScore(currentScore);
@@ -113,13 +220,11 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "New High Score Saved!", Toast.LENGTH_SHORT).show();
             }
         } else {
-            // New player: insert record
             ModelUser newUser = new ModelUser(name, currentScore, 0);
             db.insert(newUser);
             Toast.makeText(this, "Score Saved!", Toast.LENGTH_SHORT).show();
         }
     }
-
 
     private void startNewGame(GuessGame.Difficulty difficulty) {
         cancelTimer();
@@ -129,9 +234,8 @@ public class MainActivity extends AppCompatActivity {
         updateUiState();
     }
 
-
     private void startTimer() {
-        cancelTimer(); // Stop any active countdown thread
+        cancelTimer();
 
         long totalMillis = game.getCurrentDifficulty().getSeconds() * 1000L;
 
@@ -151,7 +255,6 @@ public class MainActivity extends AppCompatActivity {
             }
         }.start();
     }
-
 
     private void updateUiState() {
         scoreTextView.setText("Score: " + game.getTotalScore());
@@ -173,7 +276,6 @@ public class MainActivity extends AppCompatActivity {
         int userGuess = Integer.parseInt(input);
         String result = game.makeGuess(userGuess);
 
-        // Update remaining attempts text after guess submission
         attemptsTextView.setText("Attempts: " + game.getRemainingAttempts());
 
         switch (result) {
@@ -202,7 +304,6 @@ public class MainActivity extends AppCompatActivity {
         pickEditText.setText("");
     }
 
-
     private void showGameOverDialog(String title, String message) {
         cancelTimer();
 
@@ -217,13 +318,11 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-
     private void cancelTimer() {
         if (countDownTimer != null) {
             countDownTimer.cancel();
         }
     }
-
 
     @Override
     protected void onDestroy() {
